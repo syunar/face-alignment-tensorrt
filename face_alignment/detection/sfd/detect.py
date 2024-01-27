@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 
 from .bbox import *
-
+from tqdm.auto import tqdm
 
 def detect(net, img, device):
     img = img.transpose(2, 0, 1)
@@ -38,31 +38,45 @@ def batch_detect(net, img_batch, device):
     for i in range(len(olist) // 2):
         olist[i * 2] = F.softmax(olist[i * 2], dim=1)
 
-    olist = [oelem.data.cpu().numpy() for oelem in olist]
+    olist = [oelem.data.cpu().numpy().astype(np.float32) for oelem in olist]
 
     bboxlists = get_predictions(olist, batch_size)
     return bboxlists
 
 
 def get_predictions(olist, batch_size):
+    # print(olist[0].shape)
     bboxlists = []
     variances = [0.1, 0.2]
     for i in range(len(olist) // 2):
         ocls, oreg = olist[i * 2], olist[i * 2 + 1]
+        # print(ocls.shape, oreg.shape)
         stride = 2**(i + 2)    # 4,8,16,32,64,128
-        poss = zip(*np.where(ocls[:, 1, :, :] > 0.05))
+        # print(stride)
+        poss = zip(*np.where(ocls[:, 1, :, :] > 0.5))
+        # print(ocls[:, 1, :, :][:10])
+        # print(np.where(ocls[:, 1, :, :] > 0.05))
+        c = 0
         for Iindex, hindex, windex in poss:
+            # print(Iindex, hindex, windex)
             axc, ayc = stride / 2 + windex * stride, stride / 2 + hindex * stride
             priors = np.array([[axc / 1.0, ayc / 1.0, stride * 4 / 1.0, stride * 4 / 1.0]])
             score = ocls[:, 1, hindex, windex][:,None]
             loc = oreg[:, :, hindex, windex].copy()
             boxes = decode(loc, priors, variances)
             bboxlists.append(np.concatenate((boxes, score), axis=1))
+            c += 1
+
+        # print("c", c) 
     
+    # print(len(bboxlists))
     if len(bboxlists) == 0: # No candidates within given threshold
+        # print("y")
         bboxlists = np.array([[] for _ in range(batch_size)])
     else:
+        # print("n")
         bboxlists = np.stack(bboxlists, axis=1)
+    # print(bboxlists[0].shape)
     return bboxlists
 
 

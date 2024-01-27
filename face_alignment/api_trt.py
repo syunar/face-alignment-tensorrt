@@ -10,6 +10,7 @@ from .utils import *
 from .folder_data import FolderData
 import torch
 import torch_tensorrt
+from .detection.sfd.sfd_detector_trt import SFDDetector
 
 
 class LandmarksType(IntEnum):
@@ -52,13 +53,12 @@ models_urls = {
 }
 
 
-class FaceAlignment:
-    def __init__(self, landmarks_type, network_size=NetworkSize.LARGE,
+class FaceAlignment_tft:
+    def __init__(self, network_size=NetworkSize.LARGE,
                  device='cuda', dtype=torch.float32, flip_input=False, face_detector='sfd', face_detector_kwargs=None, verbose=False):
         self.device = device
         self.flip_input = flip_input
-        self.landmarks_type = landmarks_type
-        print(landmarks_type)
+        # self.landmarks_type = landmarks_type
         self.verbose = verbose
         self.dtype = dtype
 
@@ -77,30 +77,15 @@ class FaceAlignment:
             torch.backends.cudnn.benchmark = True
 
         # Get the face detector
-        face_detector_module = __import__('face_alignment.detection.' + face_detector,
-                                          globals(), locals(), [face_detector], 0)
-        face_detector_kwargs = face_detector_kwargs or {}
-        self.face_detector = face_detector_module.FaceDetector(device=device, verbose=verbose, **face_detector_kwargs)
+        # face_detector_module = __import__('face_alignment.detection.' + face_detector,
+        #                                   globals(), locals(), [face_detector], 0)
+        # face_detector_kwargs = face_detector_kwargs or {}
+        self.face_detector = SFDDetector(device=device, verbose=verbose)
 
-        # Initialise the face alignemnt networks
-        if landmarks_type == LandmarksType.TWO_D:
-            network_name = '2DFAN-' + str(network_size)
-        else:
-            network_name = '3DFAN-' + str(network_size)
-        self.face_alignment_net = torch.jit.load(
-            load_file_from_url(models_urls.get(pytorch_version, default_model_urls)[network_name]))
-        # self.face_alignment_net = torch.jit.load("face_alignment_fp16.ts")
+        # self.face_alignment_net = torch.jit.load(
+        #     load_file_from_url(models_urls.get(pytorch_version, default_model_urls)[network_name]))
+        self.face_alignment_net = torch.jit.load("face_alignment_fp16.ts")
 
-        self.face_alignment_net.to(device, dtype=dtype)
-        self.face_alignment_net.eval()
-
-        # Initialiase the depth prediciton network
-        if landmarks_type == LandmarksType.THREE_D:
-            self.depth_prediciton_net = torch.jit.load(
-                load_file_from_url(models_urls.get(pytorch_version, default_model_urls)['depth']))
-
-            self.depth_prediciton_net.to(device, dtype=dtype)
-            self.depth_prediciton_net.eval()
 
     def get_landmarks(self, image_or_path, detected_faces=None, return_bboxes=False, return_landmark_score=False):
         """Deprecated, please use get_landmarks_from_image
@@ -178,21 +163,6 @@ class FaceAlignment:
             pts, pts_img = torch.from_numpy(pts), torch.from_numpy(pts_img)
             pts, pts_img = pts.view(68, 2) * 4, pts_img.view(68, 2)
             scores = scores.squeeze(0)
-
-            if self.landmarks_type == LandmarksType.THREE_D:
-                heatmaps = np.zeros((68, 256, 256), dtype=np.float32)
-                for i in range(68):
-                    if pts[i, 0] > 0 and pts[i, 1] > 0:
-                        heatmaps[i] = draw_gaussian(
-                            heatmaps[i], pts[i], 2)
-                heatmaps = torch.from_numpy(
-                    heatmaps).unsqueeze_(0)
-
-                heatmaps = heatmaps.to(self.device, dtype=self.dtype)
-                depth_pred = self.depth_prediciton_net(
-                    torch.cat((inp, heatmaps), 1)).data.cpu().view(68, 1).to(dtype=torch.float32)
-                pts_img = torch.cat(
-                    (pts_img, depth_pred * (1.0 / (256.0 / (200.0 * scale)))), 1)
 
             landmarks.append(pts_img.numpy())
             landmarks_scores.append(scores)
