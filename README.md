@@ -6,7 +6,7 @@ This repository provides a solution to enhance the inference time of [original r
 ## Performance Improvement
 ![Alt text](assets/image.png)
 
-The image above demonstrates the significant improvement in inference time achieved by converting a model to TensorRT. The top section represents the normal version with an inference speed of 37.3 iterations per second (it/s), while the bottom section depicts the TensorRT version, which achieves an impressive 82.1 it/s. This results in nearly a two-fold improvement in performance.
+The image above demonstrates the significant improvement in inference time achieved by converting a model to TensorRT. The top section represents the normal version with an inference speed of 37.3 iterations per second (it/s), while the bottom section depicts the TensorRT version, which achieves an impressive 82.1 it/s. This results in nearly a two-fold improvement in run time.
 
 ### original result
 ![Alt text](assets/r1.png)
